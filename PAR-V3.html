@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Philippine Army Secure Roster System</title>
+    <style>
+        :root {
+            --army-green: #2d3e2d;
+            --dark-green: #1a241a;
+            --gold: #c5a059;
+            --white: #f4f4f4;
+            --danger: #8b0000;
+            --black: #0a0a0a;
+            --edit-blue: #2a4d69;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--black); color: var(--white); margin: 0; overflow-x: hidden; }
+
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .fade-in { animation: fadeIn 0.5s ease forwards; }
+
+        #login-container {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh;
+            background: linear-gradient(rgba(0,0,0,0.85),rgba(0,0,0,0.85)),
+                        url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+        }
+        .login-card {
+            background: var(--army-green); padding: 2.5rem; border-radius: 4px;
+            border: 2px solid var(--gold); width: 380px; box-shadow: 0 0 30px rgba(0,0,0,0.7);
+        }
+        .login-card h2 { text-align:center; color:var(--gold); margin-bottom:1.5rem; letter-spacing:2px; text-transform:uppercase; }
+        .login-card input { display:block; width:100%; margin:8px 0; }
+
+        #main-content { display:none; padding:20px; }
+        header { text-align:center; border-bottom:3px solid var(--gold); padding:30px; margin-bottom:30px; background:var(--dark-green); }
+        header h1 { margin:0; letter-spacing:3px; color:var(--gold); font-size:1.8rem; }
+
+        .card { background:var(--dark-green); padding:20px; border-radius:5px; border-left:5px solid var(--gold); margin-bottom:20px; box-shadow:0 4px 6px rgba(0,0,0,0.3); }
+
+        input { padding:12px; background:#222; border:1px solid #444; color:white; border-radius:4px; transition:border 0.3s; }
+        input:focus { outline:none; border-color:var(--gold); }
+
+        button { padding:12px 20px; cursor:pointer; background:var(--gold); border:none; color:var(--black); font-weight:bold; text-transform:uppercase; transition:0.3s; letter-spacing:1px; }
+        button:hover    { background:#e2b76e; }
+        button:disabled { background:#555; color:#888; cursor:not-allowed; }
+        .btn-danger { background:var(--danger);    color:white; padding:5px 10px; font-size:0.75rem; }
+        .btn-edit   { background:var(--edit-blue); color:white; padding:5px 10px; font-size:0.75rem; margin-right:5px; }
+        .btn-logout { float:right; background:transparent; color:var(--gold); border:1px solid var(--gold); padding:8px 15px; }
+        .btn-logout:hover { background:var(--gold); color:var(--black); }
+
+        table { width:100%; border-collapse:collapse; background:#111; }
+        th { background:var(--army-green); color:var(--gold); padding:15px; text-align:left; text-transform:uppercase; font-size:0.85rem; }
+        td { padding:15px; border-bottom:1px solid #222; font-size:0.9rem; }
+        tr:hover { background:#1a1a1a; }
+
+        .highlight-high-rank { background:rgba(197,160,89,0.1) !important; border-left:4px solid var(--gold); }
+        .highlight-high-rank td:nth-child(1),
+        .highlight-high-rank td:nth-child(2) { color:var(--gold); font-weight:bold; }
+
+        .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:10px; }
+        .action-btns { display:flex; }
+
+        #login-error   { color:#ff4d4d; font-size:0.85rem; text-align:center; margin-top:12px; font-weight:bold; min-height:20px; }
+        #attempt-badge { font-size:0.78rem; color:#aaa; text-align:center; margin-top:6px; min-height:18px; }
+        #lockout-msg   { color:#ff4d4d; font-size:0.85rem; text-align:center; margin-top:8px; font-weight:bold; min-height:20px; }
+
+        #status-bar { font-size:0.8rem; color:#aaa; margin-bottom:10px; }
+        .status-live { color:#4caf50; font-weight:bold; }
+        .status-err  { color:#ff4d4d; font-weight:bold; }
+
+        .spinner { display:inline-block; width:14px; height:14px; border:2px solid #aaa; border-top-color:var(--gold); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-container" class="fade-in">
+    <div class="login-card">
+        <h2>Access Portal</h2>
+        <input type="text"     id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button id="auth-btn" style="width:100%;margin-top:15px;">Authenticate</button>
+        <div id="login-error"></div>
+        <div id="attempt-badge"></div>
+        <div id="lockout-msg"></div>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="main-content">
+    <header>
+        <button class="btn-logout" id="logout-btn">Secure Logout</button>
+        <h1>DEPARTMENT OF CITY DEFENSE – PHILIPPINE ARMY ROSTER</h1>
+    </header>
+
+    <div class="card fade-in">
+        <h3 id="form-title">Personnel Registration</h3>
+        <input type="hidden" id="edit-id" value="">
+        <div class="form-grid">
+            <input type="text" id="new-rank"     placeholder="Rank">
+            <input type="text" id="new-name"     placeholder="Full Name">
+            <input type="text" id="new-role"     placeholder="Position / Role">
+            <input type="text" id="new-unit"     placeholder="Unit">
+            <input type="text" id="new-division" placeholder="Division">
+        </div>
+        <div style="margin-top:15px;">
+            <button id="submit-btn">Add to Roster</button>
+            <button id="cancel-btn" style="background:#444;color:white;display:none;">Cancel Edit</button>
+        </div>
+    </div>
+
+    <div class="card fade-in">
+        <input type="text" id="search-bar" placeholder="Filter by Name, Rank, or Division..." style="width:100%;">
+    </div>
+
+    <div class="card fade-in" style="overflow-x:auto;padding:0;">
+        <div id="status-bar" style="padding:10px 15px;"></div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th><th>Name</th><th>Position / Role</th>
+                    <th>Unit</th><th>Division</th><th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="roster-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// ── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://jdfhjkvgqtwzhckhyvyf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_zMd6UR9YQYRZm3xiogSTbQ_nkoj3kkk";
+const TABLE        = "personnel";
+
+// ── AUTH CONFIG ──────────────────────────────────────────────────────────────
+const STORED_USER_HASH = "c2a44a76f0dd4b4d0d0caa256aa32cff533526c5f058517f686b96421eace2f1";
+const STORED_PASS_HASH = "1ff88ac8c6872fa6e7c22829c021dc3d9f02d09d9eaeea0e4f3e2bcf71889896";
+const MAX_ATTEMPTS     = 5;
+const LOCKOUT_MS       = 5 * 60 * 1000;
+
+// ── SHA-256 ──────────────────────────────────────────────────────────────────
+async function sha256(str) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── SUPABASE HELPERS ─────────────────────────────────────────────────────────
+const headers = {
+    "apikey":        SUPABASE_KEY,
+    "Authorization": `Bearer ${SUPABASE_KEY}`,
+    "Content-Type":  "application/json",
+    "Prefer":        "return=representation"
+};
+
+async function dbFetch(path, options = {}) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers, ...options });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+}
+
+async function getAll()         { return dbFetch(`${TABLE}?order=id.asc`); }
+async function insertRow(data)  { return dbFetch(TABLE, { method:'POST', body: JSON.stringify(data) }); }
+async function updateRow(id, d) { return dbFetch(`${TABLE}?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(d) }); }
+async function deleteRow(id)    { return dbFetch(`${TABLE}?id=eq.${id}`, { method:'DELETE' }); }
+
+// ── REAL-TIME POLLING ────────────────────────────────────────────────────────
+let pollInterval = null;
+let lastData     = [];
+let searchTerm   = '';
+
+function startPolling() {
+    pollInterval = setInterval(async () => {
+        try {
+            const data = await getAll();
+            lastData   = data;
+            renderTable(filterData(data));
+            setStatus('live', `LIVE — last sync ${new Date().toLocaleTimeString()}`);
+        } catch (e) {
+            setStatus('err', 'SYNC ERROR — retrying...');
+        }
+    }, 3000);
+}
+
+function setStatus(type, msg) {
+    const el = document.getElementById('status-bar');
+    el.innerHTML = type === 'live'
+        ? `<span class="status-live">● LIVE</span> — last sync ${new Date().toLocaleTimeString()}`
+        : `<span class="status-err">⚠ ${msg}</span>`;
+}
+
+function filterData(data) {
+    if (!searchTerm) return data;
+    return data.filter(p =>
+        p.name.toLowerCase().includes(searchTerm) ||
+        p.rank.toLowerCase().includes(searchTerm) ||
+        (p.division && p.division.toLowerCase().includes(searchTerm))
+    );
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+const HIGH_TAGS = ["General","Commander","Secretary","Chief"];
+
+function renderTable(data) {
+    const tbody = document.getElementById('roster-body');
+    tbody.innerHTML = '';
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:30px;">No personnel records found.</td></tr>';
+        return;
+    }
+    data.forEach(p => {
+        const tr  = document.createElement('tr');
+        const top = HIGH_TAGS.some(t => p.rank.includes(t) || p.role.includes(t));
+        if (top) tr.classList.add('highlight-high-rank');
+        tr.innerHTML = `
+            <td>${p.rank}</td>
+            <td>${p.name}</td>
+            <td>${p.role}</td>
+            <td>${p.unit     || 'N/A'}</td>
+            <td>${p.division || 'N/A'}</td>
+            <td class="action-btns">
+                <button class="btn-edit"   data-action="edit"   data-id="${p.id}">Edit</button>
+                <button class="btn-danger" data-action="delete" data-id="${p.id}">Del</button>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ── FORM ACTIONS ─────────────────────────────────────────────────────────────
+async function handleFormSubmit() {
+    const rank = document.getElementById('new-rank').value.trim();
+    const name = document.getElementById('new-name').value.trim();
+    const role = document.getElementById('new-role').value.trim();
+    const unit = document.getElementById('new-unit').value.trim();
+    const div  = document.getElementById('new-division').value.trim();
+    const id   = document.getElementById('edit-id').value;
+
+    if (!rank || !name || !role) { alert('Rank, Name, and Role are required.'); return; }
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled    = true;
+    btn.textContent = 'SAVING...';
+
+    try {
+        if (!id) {
+            await insertRow({ rank, name, role, unit, division: div });
+        } else {
+            await updateRow(id, { rank, name, role, unit, division: div });
+        }
+        const data = await getAll();
+        lastData   = data;
+        renderTable(filterData(data));
+        setStatus('live', '');
+        resetForm();
+    } catch (e) {
+        alert('Error saving record: ' + e.message);
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = id ? 'Save Changes' : 'Add to Roster';
+    }
+}
+
+function startEdit(id) {
+    const p = lastData.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('new-rank').value     = p.rank;
+    document.getElementById('new-name').value     = p.name;
+    document.getElementById('new-role').value     = p.role;
+    document.getElementById('new-unit').value     = p.unit     || '';
+    document.getElementById('new-division').value = p.division || '';
+    document.getElementById('edit-id').value      = p.id;
+    document.getElementById('form-title').textContent     = 'Update Personnel Record';
+    document.getElementById('submit-btn').textContent     = 'Save Changes';
+    document.getElementById('cancel-btn').style.display   = 'inline-block';
+    window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+async function confirmDelete(id) {
+    if (!confirm('Confirm deletion of this record?')) return;
+    try {
+        await deleteRow(id);
+        const data = await getAll();
+        lastData   = data;
+        renderTable(filterData(data));
+    } catch (e) {
+        alert('Error deleting record: ' + e.message);
+    }
+}
+
+function resetForm() {
+    ['new-rank','new-name','new-role','new-unit','new-division'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('edit-id').value           = '';
+    document.getElementById('form-title').textContent  = 'Personnel Registration';
+    document.getElementById('submit-btn').textContent  = 'Add to Roster';
+    document.getElementById('cancel-btn').style.display = 'none';
+}
+
+// ── LOCKOUT ──────────────────────────────────────────────────────────────────
+function getAttempts() {
+    try { return JSON.parse(sessionStorage.getItem('login_attempts')) || { count:0, lockedUntil:0 }; }
+    catch { return { count:0, lockedUntil:0 }; }
+}
+function saveAttempts(d) { sessionStorage.setItem('login_attempts', JSON.stringify(d)); }
+
+let lockTimer = null;
+function startCountdown() {
+    clearInterval(lockTimer);
+    const lockEl  = document.getElementById('lockout-msg');
+    const authBtn = document.getElementById('auth-btn');
+    authBtn.disabled = true;
+    lockTimer = setInterval(() => {
+        const left = Math.ceil((getAttempts().lockedUntil - Date.now()) / 1000);
+        if (left <= 0) {
+            clearInterval(lockTimer);
+            saveAttempts({ count:0, lockedUntil:0 });
+            lockEl.textContent  = '';
+            authBtn.disabled    = false;
+        } else {
+            lockEl.textContent = `LOCKED — try again in ${left}s`;
+        }
+    }, 500);
+}
+
+// ── LOGIN ────────────────────────────────────────────────────────────────────
+async function login() {
+    const errEl   = document.getElementById('login-error');
+    const badgeEl = document.getElementById('attempt-badge');
+    const authBtn = document.getElementById('auth-btn');
+    errEl.textContent = badgeEl.textContent = '';
+
+    const attempts = getAttempts();
+    if (attempts.lockedUntil > Date.now()) { startCountdown(); return; }
+
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    if (!user || !pass) { errEl.textContent = 'USERNAME AND PASSWORD REQUIRED'; return; }
+
+    authBtn.disabled    = true;
+    authBtn.textContent = 'VERIFYING...';
+
+    const [uHash, pHash] = await Promise.all([sha256(user), sha256(pass)]);
+    authBtn.disabled    = false;
+    authBtn.textContent = 'AUTHENTICATE';
+
+    if (uHash === STORED_USER_HASH && pHash === STORED_PASS_HASH) {
+        saveAttempts({ count:0, lockedUntil:0 });
+        sessionStorage.setItem('army_auth', '1');
+        showDashboard();
+    } else {
+        attempts.count++;
+        const left = MAX_ATTEMPTS - attempts.count;
+        if (left <= 0) {
+            attempts.lockedUntil = Date.now() + LOCKOUT_MS;
+            saveAttempts(attempts);
+            startCountdown();
+        } else {
+            saveAttempts(attempts);
+            errEl.textContent   = 'ACCESS DENIED: INVALID AUTHORIZATION';
+            badgeEl.textContent = `${left} attempt${left !== 1 ? 's' : ''} remaining before lockout`;
+        }
+    }
+}
+
+function logout() {
+    clearInterval(pollInterval);
+    sessionStorage.removeItem('army_auth');
+    location.reload();
+}
+
+async function showDashboard() {
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('main-content').style.display    = 'block';
+
+    setStatus('live', '');
+    document.getElementById('status-bar').innerHTML = '<span class="spinner"></span> Connecting to database...';
+
+    try {
+        const data = await getAll();
+        lastData   = data;
+        renderTable(data);
+        setStatus('live', '');
+        startPolling();
+    } catch (e) {
+        document.getElementById('status-bar').innerHTML =
+            `<span class="status-err">⚠ Could not connect to database: ${e.message}</span>`;
+    }
+}
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('auth-btn').addEventListener('click', login);
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('submit-btn').addEventListener('click', handleFormSubmit);
+    document.getElementById('cancel-btn').addEventListener('click', resetForm);
+
+    ['username','password'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', e => {
+            if (e.key === 'Enter') login();
+        });
+    });
+
+    document.getElementById('search-bar').addEventListener('keyup', e => {
+        searchTerm = e.target.value.toLowerCase();
+        renderTable(filterData(lastData));
+    });
+
+    document.getElementById('roster-body').addEventListener('click', e => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const id     = parseInt(btn.dataset.id);
+        const action = btn.dataset.action;
+        if (action === 'edit')   startEdit(id);
+        if (action === 'delete') confirmDelete(id);
+    });
+
+    const attempts = getAttempts();
+    if (attempts.lockedUntil > Date.now()) startCountdown();
+    if (sessionStorage.getItem('army_auth') === '1') showDashboard();
+});
+</script>
+</body>
+</html>
